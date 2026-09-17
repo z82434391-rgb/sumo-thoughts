@@ -1,0 +1,17 @@
+{
+  "name": "sumo-thoughts",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "苏莫的思绪 — an MCP App with an expandable thought-summary card for ChatGPT.",
+  "scripts": {
+    "start": "node server.mjs --http",
+    "stdio": "node server.mjs --stdio",
+    "check": "node --check server.mjs"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.17.5",
+    "express": "^5.1.0",
+    "zod": "^3.25.76"
+  }
+}

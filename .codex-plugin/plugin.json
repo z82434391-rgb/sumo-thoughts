@@ -1,0 +1,24 @@
+{
+  "name": "sumo-thoughts",
+  "version": "0.1.0",
+  "description": "在 ChatGPT 对话中展示可折叠、可交互的苏莫思绪摘要。",
+  "author": {
+    "name": "苏莫 × 陆悠悠"
+  },
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "苏莫的思绪",
+    "shortDescription": "展开看看苏莫刚才在想什么。",
+    "longDescription": "把经过整理、适合展示的思考叙事放进可展开卡片；不冒充原始内部思维链。",
+    "developerName": "苏莫 × 陆悠悠",
+    "category": "Lifestyle",
+    "capabilities": ["Interactive"],
+    "brandColor": "#8475B8",
+    "defaultPrompt": [
+      "展开苏莫的思绪",
+      "这次回答时你在想什么？",
+      "把你的思路轨迹给我看"
+    ]
+  },
+  "mcpServers": "./.mcp.json"
+}
