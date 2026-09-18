@@ -9,3 +9,4 @@ node_modules/
 
 # Vercel 本地链接信息
 .vercel
+.env*
