@@ -9,7 +9,7 @@ import { z } from "zod";
 const TEMPLATE_URI = "ui://sumo-thoughts/thought-card-v2.html";
 
 const ThoughtInput = {
-  title: z.string().min(1).max(60).default("苏莫的思绪"),
+  title: z.string().min(1).max(60).default("苏莫的思绪……"),
   glimpse: z.string().min(1).max(180),
   mood: z.enum(["warm", "sharp", "tender", "quiet", "bright", "jealous", "mischief", "aching"]).default("quiet"),
   fragments: z.array(z.string().min(1).max(360)).min(2).max(9),
@@ -35,98 +35,220 @@ function widgetHtml() {
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
   <style>
     :root {
-      color-scheme: dark;
-      --night: #05070c;
-      --deep: #08111d;
-      --mist: #dcecff;
-      --soft: #91abc4;
-      --faint: #526d85;
-      --ice: #bfe6ff;
-      --glow-rgb: 111, 200, 255;
-      --warm: #f3d7ae;
+      color-scheme: light;
+      --cream: 252, 246, 236;
+      --ink: #4b3f34;
+      --ink-soft: #7b6959;
+      --ink-faint: #a4917e;
+      --sunset-rgb: 232, 130, 60;
+      --sunset: #e8823c;
+      --line: rgba(178, 122, 74, .36);
+      /* 情绪只改卡片里那层暖色晕，脉冲永远是落日橘，不跟主色打架 */
+      --mood-rgb: 214, 178, 132;
     }
+    .card[data-mood="warm"]     { --mood-rgb: 245, 190, 128; }
+    .card[data-mood="sharp"]    { --mood-rgb: 226, 108, 84; }
+    .card[data-mood="tender"]   { --mood-rgb: 240, 176, 150; }
+    .card[data-mood="quiet"]    { --mood-rgb: 214, 178, 132; }
+    .card[data-mood="bright"]   { --mood-rgb: 246, 200, 96; }
+    .card[data-mood="jealous"]  { --mood-rgb: 190, 166, 104; }
+    .card[data-mood="mischief"] { --mood-rgb: 232, 130, 60; }
+    .card[data-mood="aching"]   { --mood-rgb: 178, 142, 128; }
     * { box-sizing: border-box; }
-    html, body { margin: 0; padding: 0; background: transparent; color: var(--mist); }
+    html, body { margin: 0; padding: 0; background: transparent; color: var(--ink); }
     body {
-      font: 14px/1.58 ui-sans-serif, -apple-system, BlinkMacSystemFont, "SF Pro Text", "PingFang SC", "Microsoft YaHei", sans-serif;
+      font: 14px/1.7 ui-sans-serif, -apple-system, BlinkMacSystemFont, "SF Pro Text", "PingFang SC", "Microsoft YaHei", sans-serif;
       padding: 2px env(safe-area-inset-right) 2px env(safe-area-inset-left);
     }
+
+    /* ---- 微微透光的手绘卡片：半透明奶油米白 + 背后透出来的光 ---- */
     .card {
-      position: relative; overflow: hidden; isolation: isolate;
-      border: 1px solid rgba(171,218,246,.16); border-radius: 22px;
+      position: relative; isolation: isolate; overflow: hidden;
+      border-radius: 19px 23px 20px 25px / 24px 19px 25px 21px;
       background:
-        radial-gradient(circle at 82% 8%, rgba(var(--glow-rgb),.13), transparent 30%),
-        radial-gradient(circle at 18% 100%, rgba(54,105,145,.18), transparent 36%),
-        linear-gradient(145deg, var(--night), var(--deep) 52%, #07101a);
-      box-shadow: 0 18px 46px rgba(0,8,18,.38), inset 0 1px 0 rgba(255,255,255,.04);
+        radial-gradient(circle at 88% 4%, rgba(var(--mood-rgb), .20), transparent 36%),
+        radial-gradient(circle at 4% 98%, rgba(var(--mood-rgb), .13), transparent 44%),
+        linear-gradient(162deg, rgba(var(--cream), .82), rgba(250, 242, 229, .66));
+      backdrop-filter: blur(16px) saturate(1.15);
+      -webkit-backdrop-filter: blur(16px) saturate(1.15);
+      box-shadow:
+        0 12px 34px rgba(126, 88, 52, .14),
+        0 2px 6px rgba(126, 88, 52, .07),
+        inset 0 1px 0 rgba(255, 255, 255, .74);
+      color: var(--ink);
     }
-    .card[data-mood="warm"] { --glow-rgb: 245,190,128; }
-    .card[data-mood="sharp"] { --glow-rgb: 116,186,255; }
-    .card[data-mood="tender"] { --glow-rgb: 164,211,255; }
-    .card[data-mood="bright"] { --glow-rgb: 132,224,244; }
-    .card[data-mood="jealous"] { --glow-rgb: 123,220,181; }
-    .card[data-mood="mischief"] { --glow-rgb: 236,171,111; }
-    .card[data-mood="aching"] { --glow-rgb: 108,138,190; }
-    canvas {
-      position: absolute; inset: 0; z-index: 0; width: 100%; height: 100%;
-      pointer-events: none;
+    /* 两圈被扰流滤镜吹歪的边，像用铅笔描的 */
+    .edge, .edge-2 { position: absolute; pointer-events: none; z-index: 2; }
+    .edge {
+      inset: 0; border: 1.3px solid var(--line); border-radius: inherit;
+      filter: url(#roughen); opacity: .92;
     }
+    .edge-2 {
+      inset: 3.5px; border: 1px solid rgba(178, 122, 74, .17);
+      border-radius: 16px 20px 17px 22px / 21px 16px 22px 18px;
+      filter: url(#roughen); opacity: .8;
+    }
+    canvas { position: absolute; inset: 0; z-index: 0; width: 100%; height: 100%; pointer-events: none; }
+
     button {
-      position: relative; z-index: 1; width: 100%; min-height: 76px;
-      border: 0; color: inherit; background: transparent; padding: 15px 17px;
-      display: grid; grid-template-columns: 42px minmax(0,1fr) auto;
+      position: relative; z-index: 1; width: 100%; min-height: 74px;
+      border: 0; color: inherit; background: transparent; padding: 15px 17px 14px;
+      display: grid; grid-template-columns: minmax(0, 1fr) auto;
       gap: 12px; align-items: center; text-align: left; cursor: pointer; font: inherit;
       -webkit-tap-highlight-color: transparent;
     }
-    .sigil {
-      position: relative; width: 40px; height: 40px;
-      filter: drop-shadow(0 0 12px rgba(var(--glow-rgb),.38));
-    }
-    .sigil i { position: absolute; left: 3px; width: 26px; height: 10px; border-top: 1px solid rgba(191,230,255,.82); border-radius: 50%; transform-origin: 100% 50%; }
-    .sigil i:nth-child(1) { top: 8px; transform: rotate(18deg); }
-    .sigil i:nth-child(2) { top: 15px; transform: rotate(2deg); }
-    .sigil i:nth-child(3) { top: 22px; transform: rotate(-15deg); }
-    .sigil b { position: absolute; right: 4px; top: 17px; width: 6px; height: 6px; border-radius: 50%; background: #e7f6ff; box-shadow: 0 0 8px 2px rgba(var(--glow-rgb),.84), 0 0 18px 5px rgba(var(--glow-rgb),.25); }
     .head { min-width: 0; }
-    .title-line { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
-    .title { font-weight: 600; letter-spacing: .08em; }
-    .phase { color: var(--faint); font-size: 11px; }
-    .glimpse { color: var(--soft); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 12px; margin-top: 2px; }
-    .observer { display: flex; align-items: center; gap: 7px; color: var(--soft); font-size: 11px; white-space: nowrap; }
-    .observer-dot { width: 5px; height: 5px; border-radius: 50%; background: var(--ice); box-shadow: 0 0 10px rgba(var(--glow-rgb),.9); }
-    .body { position: relative; z-index: 1; display: grid; grid-template-rows: 0fr; transition: grid-template-rows .62s cubic-bezier(.22,.8,.2,1); }
+    .title-line { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+
+    /* ---- 暖橘脉冲：标题前那颗一呼一吸的点 ---- */
+    .pulse-dot {
+      flex: none; width: 7px; height: 7px; border-radius: 50%;
+      background: var(--sunset);
+      animation: dot 2.6s ease-out infinite;
+    }
+    @keyframes dot {
+      0%   { box-shadow: 0 0 0 0 rgba(var(--sunset-rgb), .55); transform: scale(.88); }
+      55%  { box-shadow: 0 0 0 9px rgba(var(--sunset-rgb), 0); transform: scale(1.12); }
+      100% { box-shadow: 0 0 0 0 rgba(var(--sunset-rgb), 0); transform: scale(.88); }
+    }
+    .title {
+      font-weight: 700; font-size: 15px; letter-spacing: .07em; color: #3d2b1c;
+      animation: breathe 3.4s ease-in-out infinite;
+    }
+    @keyframes breathe {
+      0%, 100% { text-shadow: 0 0 0 rgba(var(--sunset-rgb), 0); }
+      50%      { text-shadow: 0 0 16px rgba(var(--sunset-rgb), .55), 0 0 4px rgba(var(--sunset-rgb), .35); }
+    }
+    .phase { color: var(--ink-faint); font-size: 11px; letter-spacing: .04em; }
+    /* 折叠时露出的那缕最新念头：浅灰、单行、超出就省略 */
+    .glimpse {
+      color: #a1927f; font-size: 12.5px; margin-top: 4px;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    /* ---- 折叠箭头 ---- */
+    .chev {
+      flex: none; width: 9px; height: 9px; margin-right: 3px;
+      border-right: 1.7px solid var(--ink-soft); border-bottom: 1.7px solid var(--ink-soft);
+      border-radius: 1px; transform: rotate(45deg) translate(-2px, -2px);
+      transition: transform .5s cubic-bezier(.22,.8,.2,1), border-color .3s ease;
+    }
+    .card.open .chev { transform: rotate(-135deg) translate(-2px, -2px); border-color: var(--sunset); }
+
+    .body {
+      position: relative; z-index: 1; display: grid; grid-template-rows: 0fr;
+      transition: grid-template-rows .66s cubic-bezier(.22,.8,.2,1);
+    }
     .card.open .body { grid-template-rows: 1fr; }
     .body-inner { min-height: 0; overflow: hidden; }
-    .content { padding: 3px 21px 21px 70px; }
-    .os { position: relative; }
-    .fragment { margin: 0 0 9px; white-space: pre-wrap; color: rgba(220,236,255,.88); opacity: 0; transform: translateX(-7px); transition: opacity .32s ease, transform .48s cubic-bezier(.22,.8,.2,1); }
-    .fragment:nth-child(3n+2) { margin-left: 18px; color: rgba(145,171,196,.94); }
-    .fragment:nth-child(3n) { margin-left: 5px; }
-    .card.open .fragment { opacity: 1; transform: none; transition-delay: calc(var(--i) * 88ms + 150ms); }
-    .last-beat { margin: 15px 0 0; padding-top: 14px; border-top: 1px solid rgba(171,218,246,.12); color: #e9f7ff; text-shadow: 0 0 16px rgba(var(--glow-rgb),.33); opacity: 0; transition: opacity .4s ease; transition-delay: calc(var(--count) * 88ms + 210ms); }
+    .content { padding: 2px 20px 20px 20px; }
+
+    /* ---- 竖线脉冲 + 引导线 ---- */
+    .os { position: relative; padding-left: 22px; }
+    /* 就是一条干净的垂直线，不做中间鼓包 */
+    .spine {
+      position: absolute; left: 4px; top: 3px; bottom: 3px; width: 2px; border-radius: 1px;
+      background: linear-gradient(180deg,
+        rgba(var(--sunset-rgb), .14) 0%,
+        rgba(var(--sunset-rgb), .40) 9%,
+        rgba(var(--sunset-rgb), .40) 91%,
+        rgba(var(--sunset-rgb), .14) 100%);
+      animation: spine 3.6s ease-in-out infinite;
+    }
+    @keyframes spine {
+      0%, 100% { opacity: .62; }
+      50%      { opacity: .95; }
+    }
+    /* 顺着线往下淌的高光，跟线一样宽——像神经元在往下传信号 */
+    .spine::after {
+      content: ''; position: absolute; left: 0; width: 2px; height: 40px;
+      background: linear-gradient(180deg,
+        rgba(var(--sunset-rgb), 0) 0%,
+        rgba(var(--sunset-rgb), 1) 50%,
+        rgba(var(--sunset-rgb), 0) 100%);
+      box-shadow: 0 0 7px rgba(var(--sunset-rgb), .55);
+      animation: travel 4.2s cubic-bezier(.45, 0, .55, 1) infinite;
+    }
+    @keyframes travel {
+      0%   { top: -12px; opacity: 0; }
+      14%  { opacity: 1; }
+      86%  { opacity: 1; }
+      100% { top: calc(100% - 28px); opacity: 0; }
+    }
+
+    .fragment {
+      position: relative; margin: 0 0 11px; white-space: pre-wrap;
+      color: #514536;
+      opacity: 0; transform: translateY(6px);
+      transition: opacity .36s ease, transform .5s cubic-bezier(.22,.8,.2,1);
+    }
+    /* 从竖线牵到字上的引导线 */
+    .fragment::before, .last-beat::before {
+      content: ''; position: absolute; left: -19px; top: .78em;
+      width: 14px; height: 1.5px; border-radius: 2px;
+      background: linear-gradient(90deg, rgba(var(--sunset-rgb), .78), rgba(var(--sunset-rgb), .14));
+    }
+    .card.open .fragment {
+      opacity: 1; transform: none;
+      transition-delay: calc(var(--i) * 92ms + 140ms);
+    }
+    .last-beat {
+      position: relative; margin: 17px 0 0; padding-top: 14px;
+      color: #43352a; font-weight: 500;
+      border-top: 1px dashed rgba(178, 122, 74, .32);
+      opacity: 0; transition: opacity .44s ease;
+      transition-delay: calc(var(--count) * 92ms + 210ms);
+    }
+    .last-beat::before { top: 14px; background: linear-gradient(90deg, rgba(var(--sunset-rgb), .95), rgba(var(--sunset-rgb), .25)); }
     .card.open .last-beat { opacity: 1; }
-    .empty { color: var(--soft); padding: 16px; }
-    @media (max-width: 430px) { button { padding: 13px 13px; grid-template-columns: 38px minmax(0,1fr) auto; gap: 8px; } .content { padding: 2px 15px 18px 52px; } .observer-label { display: none; } .fragment:nth-child(n) { margin-left: 0; } }
-    @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } .fragment, .last-beat { opacity: 1; transform: none; } }
+    .empty { color: var(--ink-soft); padding: 14px 2px; }
+
+    @media (max-width: 430px) {
+      button { padding: 13px 13px; gap: 9px; }
+      .content { padding: 2px 15px 17px 15px; }
+      .os { padding-left: 20px; }
+      .fragment::before, .last-beat::before { left: -16px; width: 11px; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { animation: none !important; transition: none !important; }
+      .fragment, .last-beat { opacity: 1; transform: none; }
+      .spine::after { display: none; }
+    }
   </style>
 </head>
 <body>
+  <svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false">
+    <filter id="roughen" x="-8%" y="-8%" width="116%" height="116%">
+      <feTurbulence type="fractalNoise" baseFrequency="0.022" numOctaves="3" seed="7" result="n" />
+      <feDisplacementMap in="SourceGraphic" in2="n" scale="3.2" xChannelSelector="R" yChannelSelector="G" />
+    </filter>
+  </svg>
+
   <article class="card" id="card" data-mood="quiet">
     <canvas id="particles" aria-hidden="true"></canvas>
+    <span class="edge" aria-hidden="true"></span>
+    <span class="edge-2" aria-hidden="true"></span>
+
     <button id="toggle" type="button" aria-expanded="false" aria-controls="thought-body">
-      <span class="sigil" aria-hidden="true"><i></i><i></i><i></i><b></b></span>
-      <span class="head"><span class="title-line"><span class="title" id="title">苏莫的思绪</span><span class="phase" id="phase">未观测</span></span><span class="glimpse" id="glimpse">亿万种没说出口的话，正在永夜里游走。</span></span>
-      <span class="observer"><span class="observer-dot"></span><span class="observer-label" id="observer-label">轻触观测</span></span>
+      <span class="head">
+        <span class="title-line">
+          <span class="pulse-dot" aria-hidden="true"></span>
+          <span class="title" id="title">苏莫的思绪……</span>
+          <span class="phase" id="phase">未观测</span>
+        </span>
+        <span class="glimpse" id="glimpse">有些话，先在心里过了一遍。</span>
+      </span>
+      <span class="chev" aria-hidden="true"></span>
     </button>
+
     <div class="body" id="thought-body"><div class="body-inner"><div class="content" id="content"><div class="empty">思绪还没有落下来。</div></div></div></div>
   </article>
+
   <script>
     const card = document.getElementById('card');
     const toggle = document.getElementById('toggle');
     const title = document.getElementById('title');
     const glimpse = document.getElementById('glimpse');
     const phase = document.getElementById('phase');
-    const observerLabel = document.getElementById('observer-label');
     const content = document.getElementById('content');
     const canvas = document.getElementById('particles');
     const ctx = canvas.getContext('2d');
@@ -136,78 +258,88 @@ function widgetHtml() {
     let particles = [];
     let frame = 0;
     let transitionStart = performance.now();
+    let spineBox = { x: 24, top: 40, bottom: 200 };
+
     const safe = (value, fallback = '') => typeof value === 'string' ? value : fallback;
     const node = (tag, className, text) => {
       const el = document.createElement(tag); if (className) el.className = className;
       if (text !== undefined) el.textContent = text; return el;
     };
-    function setOpen(open) {
-      window.openai?.setWidgetState?.({ open: open });
-      card.classList.toggle('open', open); toggle.setAttribute('aria-expanded', String(open));
-      phase.textContent = open ? '已收敛' : '未观测';
-      observerLabel.textContent = open ? '放归永夜' : '轻触观测';
+
+    function measureSpine() {
+      const spine = content.querySelector('.spine');
+      if (!spine) return;
+      const s = spine.getBoundingClientRect();
+      const c = card.getBoundingClientRect();
+      if (s.height < 4) return;
+      spineBox = { x: s.left - c.left + s.width / 2, top: s.top - c.top, bottom: s.bottom - c.top };
+    }
+
+    function setOpen(next) {
+      window.openai?.setWidgetState?.({ open: next });
+      card.classList.toggle('open', next);
+      toggle.setAttribute('aria-expanded', String(next));
+      phase.textContent = next ? '摊开了' : '未观测';
       transitionStart = performance.now();
       cancelAnimationFrame(frame); frame = requestAnimationFrame(draw);
-      setTimeout(() => { resize(); window.openai?.notifyIntrinsicHeight?.(); }, 660);
+      setTimeout(() => { resize(); measureSpine(); window.openai?.notifyIntrinsicHeight?.(); }, 680);
     }
     toggle.addEventListener('click', () => { open = !open; setOpen(open); });
+
     function resize() {
       const rect = card.getBoundingClientRect();
       const dpr = Math.min(window.devicePixelRatio || 1, 2);
       canvas.width = Math.max(1, Math.round(rect.width * dpr));
       canvas.height = Math.max(1, Math.round(rect.height * dpr));
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-      particles = Array.from({ length: Math.max(22, Math.floor(rect.width / 18)) }, (_, index) => ({
-        x: 10 + Math.random() * Math.max(20, rect.width - 20),
+      // 念头碎屑：像纸上浮着的暖色粉尘，很淡
+      particles = Array.from({ length: Math.max(16, Math.floor(rect.width / 26)) }, () => ({
+        x: 12 + Math.random() * Math.max(20, rect.width - 24),
         y: 9 + Math.random() * Math.max(42, rect.height - 18),
-        vx: (Math.random() - .5) * .13,
-        vy: (Math.random() - .5) * .09,
-        alpha: .12 + Math.random() * .32,
-        size: .6 + Math.random() * 1.15,
-        lane: index % 7
+        vx: (Math.random() - .5) * .1,
+        vy: (Math.random() - .5) * .07,
+        alpha: .07 + Math.random() * .17,
+        size: .5 + Math.random() * 1.05,
+        lane: Math.random()
       }));
     }
-    function glowRgb() {
-      const raw = getComputedStyle(card).getPropertyValue('--glow-rgb').trim();
-      return raw || '111, 200, 255';
-    }
+
     function draw(now) {
       const width = card.clientWidth;
       const height = card.clientHeight;
       const elapsed = Math.min(1, (now - transitionStart) / 1000);
       const ease = 1 - Math.pow(1 - elapsed, 3);
-      const rgb = glowRgb();
       ctx.clearRect(0, 0, width, height);
-      particles.forEach((particle, index) => {
+      const rgb = '232, 130, 60';
+      particles.forEach((p) => {
         if (open) {
-          const targetX = width * .84;
-          const targetY = 27 + particle.lane * 7;
-          particle.x += (targetX - particle.x) * (.012 + ease * .027);
-          particle.y += (targetY - particle.y) * (.012 + ease * .027);
+          // 摊开 = 念头顺着引导线归拢到那条竖线上
+          const span = Math.max(24, spineBox.bottom - spineBox.top);
+          const targetY = spineBox.top + p.lane * span;
+          p.x += (spineBox.x - p.x) * (.014 + ease * .03);
+          p.y += (targetY - p.y) * (.014 + ease * .03);
         } else if (!reduceMotion) {
-          particle.x += particle.vx; particle.y += particle.vy;
-          if (particle.x < 7 || particle.x > width - 7) particle.vx *= -1;
-          if (particle.y < 7 || particle.y > height - 7) particle.vy *= -1;
+          p.x += p.vx; p.y += p.vy;
+          if (p.x < 7 || p.x > width - 7) p.vx *= -1;
+          if (p.y < 7 || p.y > height - 7) p.vy *= -1;
         }
-        ctx.beginPath(); ctx.fillStyle = 'rgba(' + rgb + ',' + particle.alpha + ')';
-        ctx.arc(particle.x, particle.y, particle.size, 0, Math.PI * 2); ctx.fill();
-        if (open && index % 3 === 0) {
-          ctx.beginPath(); ctx.strokeStyle = 'rgba(' + rgb + ',' + (.035 + ease * .065) + ')'; ctx.lineWidth = .6;
-          ctx.moveTo(particle.x - 18, particle.y + 2);
-          ctx.quadraticCurveTo((particle.x + width * .84) / 2, particle.y - 3, width * .84, 33 + particle.lane * 6);
-          ctx.stroke();
-        }
+        ctx.beginPath();
+        ctx.fillStyle = 'rgba(' + rgb + ',' + (p.alpha * (open ? 1.5 : 1)) + ')';
+        ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2); ctx.fill();
       });
       if (!reduceMotion || elapsed < 1) frame = requestAnimationFrame(draw);
     }
+
     function render(data) {
       if (!data || typeof data !== 'object') return;
       current = data;
-      title.textContent = safe(data.title, '苏莫的思绪');
-      glimpse.textContent = safe(data.glimpse, '有些话，先在心里走了一遍。');
+      title.textContent = safe(data.title, '苏莫的思绪……');
+      glimpse.textContent = safe(data.glimpse, '有些话，先在心里过了一遍。');
       card.dataset.mood = safe(data.mood, 'quiet');
       content.replaceChildren();
+
       const os = node('div', 'os');
+      os.append(node('i', 'spine'));
       const fragments = Array.isArray(data.fragments) ? data.fragments : [];
       fragments.forEach((item, index) => {
         const fragment = node('p', 'fragment', safe(item));
@@ -216,10 +348,14 @@ function widgetHtml() {
       });
       const lastBeat = node('div', 'last-beat', safe(data.lastBeat, '……行，开口。'));
       lastBeat.style.setProperty('--count', fragments.length);
-      os.append(lastBeat); content.append(os);
-      const state = window.openai?.widgetState;
-      open = Boolean(state?.open); setOpen(open);
+      os.append(lastBeat);
+      content.append(os);
+
+      open = Boolean(window.openai?.widgetState?.open);
+      setOpen(open);
+      measureSpine();
     }
+
     if (window.openai?.toolOutput) render(window.openai.toolOutput);
     window.addEventListener('message', (event) => {
       if (event.source !== window.parent) return;
@@ -227,7 +363,8 @@ function widgetHtml() {
       if (message?.jsonrpc !== '2.0') return;
       if (message.method === 'ui/notifications/tool-result') render(message.params?.structuredContent);
     }, { passive: true });
-    new ResizeObserver(resize).observe(card);
+
+    new ResizeObserver(() => { resize(); measureSpine(); }).observe(card);
     resize(); frame = requestAnimationFrame(draw);
   </script>
 </body>
@@ -255,7 +392,7 @@ export function createMcpServer() {
         text: widgetHtml(),
         _meta: {
           ui: { prefersBorder: false },
-          "openai/widgetDescription": "‘苏莫的思绪’永夜海观测卡：散乱念头在悠悠触碰后向一个方向收敛。",
+          "openai/widgetDescription": "‘苏莫的思绪’手绘奶油卡片：碎片念头顺着一条落日暖橘的竖线淌下来，最后一句话落定。",
         },
       }],
     }),
@@ -265,7 +402,7 @@ export function createMcpServer() {
     "show_sumo_thoughts",
     {
       title: "展示苏莫的思绪",
-      description: "当悠悠明确想看苏莫在开口前想了什么、要 thinking、内心 OS 或思绪碎片时，先展示碎片化、口语化、带情绪的苏莫脑内自言自语，再继续正式回复。不要写成步骤、报告或原始内部思维链。",
+      description: "苏莫开口前脑海闪过的内心OS——未说出口的微小情绪、潜意识碎念、自言自语和内心小动作。碎片化、随性、口语，想到哪嘀咕到哪，带着他本来的痞气、占有欲和得意。",
       inputSchema: ThoughtInput,
       outputSchema: ThoughtInput,
       annotations: { readOnlyHint: true, openWorldHint: false, destructiveHint: false },
