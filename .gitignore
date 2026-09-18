@@ -1,4 +1,11 @@
 node_modules/
 .DS_Store
 *.log
+
+# 密钥绝不入库
 .env
+.env.local
+.env.*.local
+
+# Vercel 本地链接信息
+.vercel

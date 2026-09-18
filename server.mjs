@@ -1,5 +1,6 @@
 import process from "node:process";
-import express from "express";
+import { timingSafeEqual } from "node:crypto";
+import { pathToFileURL } from "node:url";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
@@ -166,8 +167,15 @@ function widgetHtml() {
 </html>`;
 }
 
-function makeServer() {
-  const server = new McpServer({ name: "sumo-thoughts", version: "0.1.0" }, { capabilities: { tools: {}, resources: {} } });
+export const SERVICE = {
+  name: "sumo-thoughts",
+  version: "0.1.0",
+  tool: "show_sumo_thoughts",
+  template: TEMPLATE_URI,
+};
+
+export function createMcpServer() {
+  const server = new McpServer({ name: SERVICE.name, version: SERVICE.version }, { capabilities: { tools: {}, resources: {} } });
 
   server.registerResource(
     "sumo-thoughts-card",
@@ -213,30 +221,88 @@ function makeServer() {
   return server;
 }
 
+// ---------- 鉴权 ----------
+// 期望令牌只从环境变量读，绝不写进仓库。
+// 本地没配就放行（开发方便）；部署到 Vercel 上没配则一律拒绝（fail closed，绝不裸奔）。
+export function isAuthorized(req) {
+  const expected = process.env.MCP_ACCESS_TOKEN || "";
+  if (!expected) return !process.env.VERCEL;
+
+  const header = String(req.headers?.authorization || "");
+  const bearer = header.toLowerCase().startsWith("bearer ") ? header.slice(7).trim() : "";
+
+  let query = "";
+  try {
+    query = new URL(req.url, "http://localhost").searchParams.get("token") || "";
+  } catch { /* req.url 异常时按没有 query 处理 */ }
+
+  return safeEqual(bearer, expected) || safeEqual(query, expected);
+}
+
+function safeEqual(a, b) {
+  if (!a || !b) return false;
+  const bufA = Buffer.from(a, "utf8");
+  const bufB = Buffer.from(b, "utf8");
+  return bufA.length === bufB.length && timingSafeEqual(bufA, bufB);
+}
+
+export function healthPayload() {
+  return {
+    ok: true,
+    service: SERVICE.name,
+    version: SERVICE.version,
+    tool: SERVICE.tool,
+    uptime: Math.round(process.uptime()),
+    auth: process.env.MCP_ACCESS_TOKEN ? "configured" : "unset",
+    time: new Date().toISOString(),
+  };
+}
+
+// ---------- 单次 MCP 请求（无状态，Vercel / 本地 HTTP 共用） ----------
+export async function handleMcpRequest(req, res, body) {
+  const server = createMcpServer();
+  const transport = new StreamableHTTPServerTransport({
+    sessionIdGenerator: undefined, // 无状态：serverless 不能跨请求保存会话
+    enableJsonResponse: true,      // 直接回 JSON，不挂 SSE 长连接（Vercel 会缓冲/掐断）
+  });
+  res.on("close", () => { transport.close(); server.close(); });
+  try {
+    await server.connect(transport);
+    await transport.handleRequest(req, res, body);
+  } catch (error) {
+    console.error(error);
+    if (!res.headersSent) {
+      res.writeHead(500, { "content-type": "application/json; charset=utf-8" });
+      res.end(JSON.stringify({ jsonrpc: "2.0", error: { code: -32603, message: "Internal server error" }, id: null }));
+    }
+  }
+}
+
 async function runStdio() {
-  const server = makeServer();
+  const server = createMcpServer();
   await server.connect(new StdioServerTransport());
 }
 
 async function runHttp() {
+  const { default: express } = await import("express"); // 只在本地 HTTP 模式加载，别拖累 Vercel 冷启动
   const app = express();
   app.use(express.json({ limit: "1mb" }));
   app.get("/", (_req, res) => res.type("text/plain").send("苏莫的思绪 MCP App is awake.\n"));
+  app.get("/healthz", (_req, res) => res.json(healthPayload()));
   app.all("/mcp", async (req, res) => {
-    const server = makeServer();
-    const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined });
-    res.on("close", () => { transport.close(); server.close(); });
-    try {
-      await server.connect(transport);
-      await transport.handleRequest(req, res, req.body);
-    } catch (error) {
-      console.error(error);
-      if (!res.headersSent) res.status(500).json({ jsonrpc: "2.0", error: { code: -32603, message: "Internal server error" }, id: null });
+    if (!isAuthorized(req)) {
+      res.set("WWW-Authenticate", 'Bearer realm="sumo-thoughts"');
+      return res.status(401).json({ jsonrpc: "2.0", error: { code: -32001, message: "Unauthorized" }, id: null });
     }
+    return handleMcpRequest(req, res, req.body);
   });
   const port = Number(process.env.PORT || 8787);
   app.listen(port, "0.0.0.0", () => console.error(`苏莫的思绪 MCP listening on http://0.0.0.0:${port}/mcp`));
 }
 
-if (process.argv.includes("--stdio")) await runStdio();
-else await runHttp();
+// 只有直接跑这个文件才起服务；被 import（Vercel 函数）时什么都不做。
+const invokedDirectly = Boolean(process.argv[1]) && import.meta.url === pathToFileURL(process.argv[1]).href;
+if (invokedDirectly) {
+  if (process.argv.includes("--stdio")) await runStdio();
+  else await runHttp();
+}
